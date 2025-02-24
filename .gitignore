@@ -1,1 +1,6 @@
 vtt/
+*.wav
+*.mp4
+
+cache/
+__pycache__/
