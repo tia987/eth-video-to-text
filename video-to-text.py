@@ -17,9 +17,6 @@ import requests
 import ffmpeg
 import json
 
-CACHE_DIR = "cache"  # Directory to store cached transcriptions
-os.makedirs(CACHE_DIR, exist_ok=True)  # Ensure the cache directory exists
-
 def download_video(url, output_path):
     """Downloads video using requests instead of wget."""
     response = requests.get(url, stream=True)
