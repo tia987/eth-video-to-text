@@ -1,16 +1,24 @@
 import os
 import subprocess
 import sys
+
 from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton, QTextEdit, QComboBox, 
                              QFileDialog, QHBoxLayout, QSlider)
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 from PyQt6.QtMultimediaWidgets import QVideoWidget
 from PyQt6.QtCore import QUrl, QTimer, Qt
 from PyQt6.QtGui import QTextCursor
+
+from cache_handler import *
+
 import whisper
 import threading
 import requests
 import ffmpeg
+import json
+
+CACHE_DIR = "cache"  # Directory to store cached transcriptions
+os.makedirs(CACHE_DIR, exist_ok=True)  # Ensure the cache directory exists
 
 def download_video(url, output_path):
     """Downloads video using requests instead of wget."""
@@ -33,76 +41,93 @@ def extract_audio(video_path, audio_path):
         print(f"Error: {e.stderr.decode()}")
 
 def transcribe_audio(audio_path, model_name):
-    """Transcribes the audio using Whisper AI."""
+    """Check cache before running Whisper AI and save transcription if not cached."""
+    cache_file = get_cache_path(audio_path, model_name)
+    
+    # Check if cached transcription exists
+    if os.path.exists(cache_file):
+        print(f"Loading cached transcription: {cache_file}")
+        with open(cache_file, "r") as f:
+            return json.load(f)  # Load cached transcription
+
+    print("Running Whisper AI...")
     model = whisper.load_model(model_name)
     result = model.transcribe(audio_path)
 
-    # return result["text"]
+    # Save the result in cache
+    with open(cache_file, "w") as f:
+        json.dump(result, f)
+
     return result
+
 
 class VideoTranscriber(QWidget):
     def __init__(self):
         super().__init__()
-        self.init_ui()
+        self.UI()
     
-    def init_ui(self):
-        horizontal_layout = QHBoxLayout()
-        vertical_layout = QVBoxLayout()
+    def UI(self):
+        horizontal_layout_1 = QHBoxLayout()
+        vertical_layout_1 = QVBoxLayout()
+        vertical_layout_2 = QVBoxLayout()
+        horizontal_layout_2 = QHBoxLayout()
         
         # Left Section (Video Player Section)
         self.video_widget = QVideoWidget()
-        horizontal_layout.addWidget(self.video_widget, 2)
+        horizontal_layout_1.addLayout(vertical_layout_2, 2)
+        vertical_layout_2.addWidget(self.video_widget)
+        vertical_layout_2.addLayout(horizontal_layout_2)
         
         self.media_player = QMediaPlayer()
         self.audio_output = QAudioOutput()
         self.media_player.setAudioOutput(self.audio_output)
         self.media_player.setVideoOutput(self.video_widget)
 
-        # Slider for video position
-        self.position_slider = QSlider(Qt.Orientation.Horizontal)
-        self.position_slider.setRange(0, 100)
-        self.position_slider.sliderMoved.connect(self.set_position)
-        vertical_layout.addWidget(self.position_slider)
-
         # Right Section (Controls + Transcript)
-        self.label = QLabel("Enter Video URL:")
-        vertical_layout.addWidget(self.label)
+        self.label = QLabel("Enter Video URL or PATH:")
+        vertical_layout_1.addWidget(self.label)
         
         self.url_entry = QLineEdit()
-        vertical_layout.addWidget(self.url_entry)
+        vertical_layout_1.addWidget(self.url_entry)
         
         self.transcribe_button = QPushButton("Start Transcription")
         self.transcribe_button.clicked.connect(self.start_transcription)
-        vertical_layout.addWidget(self.transcribe_button)
+        vertical_layout_1.addWidget(self.transcribe_button)
 
         # Add file selection button
         self.select_file_button = QPushButton("Select Video File")
         self.select_file_button.clicked.connect(self.select_video_file)
-        vertical_layout.addWidget(self.select_file_button)
+        vertical_layout_1.addWidget(self.select_file_button)
         
         # Forward, pause and Backward buttons
         self.backward_button = QPushButton("⏪")
         self.backward_button.clicked.connect(self.backward_10s)
-        vertical_layout.addWidget(self.backward_button)
+        horizontal_layout_2.addWidget(self.backward_button, 0, Qt.AlignmentFlag.AlignLeft)
         
         self.playback_button = QPushButton("⏯")
         self.playback_button.clicked.connect(self.toggle_playback)
-        vertical_layout.addWidget(self.playback_button)
+        horizontal_layout_2.addWidget(self.playback_button, 0, Qt.AlignmentFlag.AlignLeft)
         
         self.forward_button = QPushButton("⏩")
         self.forward_button.clicked.connect(self.forward_10s)
-        vertical_layout.addWidget(self.forward_button)
+        horizontal_layout_2.addWidget(self.forward_button, 0, Qt.AlignmentFlag.AlignLeft)
+
+        # Slider for video position
+        self.position_slider = QSlider(Qt.Orientation.Horizontal)
+        self.position_slider.setRange(0, 100)
+        self.position_slider.sliderMoved.connect(self.set_position)
+        horizontal_layout_2.addWidget(self.position_slider, 1)
         
         self.output_text = QTextEdit()
         self.output_text.setReadOnly(True)
-        vertical_layout.addWidget(self.output_text)
+        vertical_layout_1.addWidget(self.output_text)
 
         self.combo_box = QComboBox()
         self.combo_box.addItems(["tiny", "base", "small", "medium", "large", "turbo"])
-        vertical_layout.addWidget(self.combo_box)
+        vertical_layout_1.addWidget(self.combo_box)
 
-        horizontal_layout.addLayout(vertical_layout, 1)
-        self.setLayout(horizontal_layout)
+        horizontal_layout_1.addLayout(vertical_layout_1, 1)
+        self.setLayout(horizontal_layout_1)
         self.setWindowTitle("Video Transcriber")
         self.resize(900, 600)
 
@@ -153,37 +178,6 @@ class VideoTranscriber(QWidget):
             self.output_text.setText(f"Error: {str(e)}")
 
     def update_transcription(self, position):
-        # # Ensure transcription segments exist and are a list
-        # current_time = position / 1000  # Convert ms to seconds
-        # previous_text = []
-        # upcoming_text = []
-        # active_segment = ""
-
-        # for segment in self.transcription_segments:
-        #     if segment['start'] < current_time:
-        #         previous_text.append(segment['text'])
-        #     elif segment['start'] <= current_time <= segment['end']:
-        #         active_segment = segment['text']
-        #     else:
-        #         upcoming_text.append(segment['text'])
-
-        # # Preserve scroll position
-        # scroll_position = self.output_text.verticalScrollBar().value()
-
-        # # Format the text
-        # transcript_html = (
-        #     f"<span style='color: white;'>{' '.join(previous_text[-10:])}</span> "  # Show last 10 lines
-        #     f"<span style='color: cyan; font-weight: bold;'>{active_segment}</span> "
-        #     f"<span style='color: gray;'>{' '.join(upcoming_text[:10])}</span>"  # Show next 10 lines
-        # )
-
-        # self.output_text.setHtml(transcript_html)
-
-        # # Restore scroll position
-        # self.output_text.verticalScrollBar().setValue(scroll_position)
-
-
-
         current_time = position / 1000  # Convert ms to seconds
         previous_text = []
         upcoming_text = []
