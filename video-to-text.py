@@ -195,7 +195,7 @@ class VideoTranscriber(QWidget):
             if segment['start'] < current_time:
                 previous_lines.append(segment['text'])
             elif segment['start'] <= current_time <= segment['end']:
-                active_segment = segment['text']
+                active_lines = segment['text']
             else:
                 upcoming_lines.append(segment['text'])
 
@@ -215,10 +215,10 @@ class VideoTranscriber(QWidget):
                 active_word += " "
                 upcoming_text = words[word_index + 1:]
                 break
-            elif segment['start'] < current_time:
-                previous_text.append(segment['text'])
-            else:
-                upcoming_text.append(segment['text'])
+            # elif segment['start'] < current_time:
+            #     previous_text.append(segment['text'])
+            # else:
+            #     upcoming_text.append(segment['text'])
 
         # Preserve scroll position
         scroll_position = self.output_text.verticalScrollBar().value()
@@ -226,11 +226,12 @@ class VideoTranscriber(QWidget):
         # Format the text with word-level highlighting
         transcript_html = (
             # f"<div style='text-align: center;'>"
-            f"<span style='color: white;'>{' '.join(previous_lines[-7:])}</span>"  # Show last 10 lines
-            f"<span style='color: white;'>{' '.join(previous_text[-20:])}</span>"  # Last 10 spoken words
+            f"<span style='color: white;'>{' '.join(previous_lines[-7:-1])}</span>"  # Show last 7 lines
+            f"<span style='color: white;'>{' '}</span>"  # Set spacing between previous line and active line
+            f"<span style='color: white;'>{' '.join(previous_text[:])}</span>"  # Last 20 spoken words
             f"<span style='color: cyan; font-weight: bold;'>{active_word}</span>"
-            f"<span style='color: gray;'>{' '.join(upcoming_text[:20])}</span>"  # Next 10 words
-            f"<span style='color: gray;'>{' '.join(upcoming_lines[:7])}</span>"  # Show next 10 lines
+            f"<span style='color: gray;'>{' '.join(upcoming_text[:])}</span>"  # Next 20 words
+            f"<span style='color: gray;'>{' '.join(upcoming_lines[:7])}</span>"  # Show next 7 lines
             # f"</div>"
         )
 
