@@ -68,6 +68,7 @@ class VideoTranscriber(QWidget):
         vertical_layout_1 = QVBoxLayout()
         vertical_layout_2 = QVBoxLayout()
         horizontal_layout_2 = QHBoxLayout()
+        horizontal_layout_3 = QHBoxLayout()
         
         # Left Section (Video Player Section)
         self.video_widget = QVideoWidget()
@@ -119,9 +120,17 @@ class VideoTranscriber(QWidget):
         self.output_text.setReadOnly(True)
         vertical_layout_1.addWidget(self.output_text)
 
+        # Whisper model Selection
         self.combo_box = QComboBox()
         self.combo_box.addItems(["tiny", "base", "small", "medium", "large", "turbo"])
-        vertical_layout_1.addWidget(self.combo_box)
+        horizontal_layout_3.addWidget(self.combo_box)
+
+        # Playback Speed Selection
+        self.speed_combo = QComboBox()
+        self.speed_combo.addItems(["1.0x", "1.25x", "1.5x", "1.75x", "2.0x"])
+        self.speed_combo.currentIndexChanged.connect(self.change_speed)
+        horizontal_layout_3.addWidget(self.speed_combo)
+        vertical_layout_1.addLayout(horizontal_layout_3)
 
         horizontal_layout_1.addLayout(vertical_layout_1, 1)
         self.setLayout(horizontal_layout_1)
@@ -251,6 +260,18 @@ class VideoTranscriber(QWidget):
             self.media_player.pause()
         else:
             self.media_player.play()
+    
+    def change_speed(self):
+        speed_map = {
+            "1.0x": 1.0,
+            "1.25x": 1.25,
+            "1.5x": 1.5,
+            "1.75x": 1.75,
+            "2.0x": 2.0
+        }
+        selected_speed = self.speed_combo.currentText()
+        self.media_player.setPlaybackRate(speed_map[selected_speed])
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
