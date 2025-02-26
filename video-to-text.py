@@ -56,6 +56,7 @@ class VideoTranscriber(QWidget):
     def __init__(self):
         super().__init__()
         self.UI()
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
     
     def UI(self):
         horizontal_layout_1 = QHBoxLayout()
@@ -273,6 +274,14 @@ class VideoTranscriber(QWidget):
         }
         selected_speed = self.speed_combo.currentText()
         self.media_player.setPlaybackRate(speed_map[selected_speed])
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key.Key_Space:
+            self.toggle_playback()
+            event.accept()
+        else:
+            super().keyPressEvent(event)
+
 
 
 if __name__ == "__main__":
