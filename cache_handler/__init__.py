@@ -1,2 +1,2 @@
-from .audio_hash import get_audio_hash
+from .video_hash import get_video_hash
 from .get_path import get_cache_path

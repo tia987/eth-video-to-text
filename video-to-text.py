@@ -37,16 +37,10 @@ def extract_audio(video_path, audio_path):
     except ffmpeg.Error as e:
         print(f"Error: {e.stderr.decode()}")
 
-def transcribe_audio(audio_path, model_name):
+def transcribe_audio(audio_path, video_path,model_name):
     """Check cache before running Whisper AI and save transcription if not cached."""
-    cache_file = get_cache_path(audio_path, model_name)
+    cache_file = get_cache_path(video_path, model_name)
     
-    # Check if cached transcription exists
-    if os.path.exists(cache_file):
-        print(f"Loading cached transcription: {cache_file}")
-        with open(cache_file, "r") as f:
-            return json.load(f)  # Load cached transcription
-
     print("Running Whisper AI...")
     model = whisper.load_model(model_name)
     result = model.transcribe(audio_path)
@@ -165,16 +159,23 @@ class VideoTranscriber(QWidget):
             
             if url_or_path.startswith("http"):
                 self.output_text.setText("Downloading video...")
-                download_video(url_or_path, video_path)
+                download_video(url_or_path, video_path) # TODO: change with cached path
             
-            self.output_text.setText("Extracting audio...")
-            extract_audio(video_path, audio_path)
-            
-            self.output_text.setText("Transcribing audio...")
-            transcript = transcribe_audio(audio_path, model_name)
+            # Check for cache
+            cache_file = get_cache_path(video_path, model_name)
+            print(cache_file)
+            if os.path.exists(cache_file):
+                print(f"Loading cached transcription: {cache_file}")
+                with open(cache_file, "r") as f:
+                    transcript = json.load(f)  # Load cached transcription
+            else : # If not cached, extract audio and transcribe
+                self.output_text.setText("Extracting audio...")
+                extract_audio(video_path, audio_path)
+                
+                self.output_text.setText("Transcribing audio...")
+                transcript = transcribe_audio(audio_path, video_path, model_name)
             
             self.output_text.setText("")
-            # self.transcription_words = transcript["text"]#.split()
             self.transcription_segments = transcript["segments"]
             self.current_index = 0
             self.media_player.setSource(QUrl.fromLocalFile(video_path))
