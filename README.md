@@ -42,3 +42,13 @@ python3 main.py
 - Transcription speed depends on model size and hardware
 - Large models require significant RAM (8GB+ recommended)
 - Currently processes one video at a time
+
+## TODOs
+- Add audio and video cache
+- RSS to eth websites
+- cache from rss videos + selection of which videos to play
+- Settings and advanced controls
+- Text resize
+- delete cache through GUI
+- Change pitch when speeding video
+- Increase video size
