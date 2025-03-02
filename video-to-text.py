@@ -51,7 +51,6 @@ def transcribe_audio(audio_path, video_path,model_name):
 
     return result
 
-
 class VideoTranscriber(QWidget):
     def __init__(self):
         super().__init__()
@@ -281,8 +280,6 @@ class VideoTranscriber(QWidget):
             event.accept()
         else:
             super().keyPressEvent(event)
-
-
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
