@@ -9,10 +9,13 @@ from PyQt6.QtCore import QUrl, Qt
 from cache_handler import *
 from video_transcriber import *
 from video_downloader import *
+from settings_window import *
 
 import whisper
 import ffmpeg
 import json
+
+CONFIG_FILE = "cache/config.json"
 
 def extract_audio(video_path, audio_path):
     try:
@@ -47,10 +50,10 @@ class VideoTranscriber(QWidget):
         self.switch_back_callback = switch_back_callback
         self.video_identifier = video_identifier  # Could be a URL, file path, or lecture title
         
-        self.UI()
+        self.init_ui()
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
     
-    def UI(self):
+    def init_ui(self):
         horizontal_layout_1 = QHBoxLayout()
         vertical_layout_1 = QVBoxLayout()
         vertical_layout_2 = QVBoxLayout()
@@ -77,7 +80,9 @@ class VideoTranscriber(QWidget):
         self.label = QLabel("Enter Video URL or PATH:")
         vertical_layout_1.addWidget(self.label)
         
+        # TODO: Directly set video path
         self.url_entry = QLineEdit()
+        self.url_entry.setText(self.video_identifier)
         vertical_layout_1.addWidget(self.url_entry)
         
         self.transcribe_button = QPushButton("Start Transcription")
@@ -222,16 +227,21 @@ class VideoTranscriber(QWidget):
         # Preserve scroll position
         scroll_position = self.output_text.verticalScrollBar().value()
 
+        # Retrieve the font size from the settings
+        settings = load_settings()
+        font_size = settings.get("font_size", 12)
+
         # Format the text with word-level highlighting
         transcript_html = (
             # f"<div style='text-align: center;'>"
+            f"<div style='font-size: {font_size}px;'>"
             f"<span style='color: white;'>{' '.join(previous_lines[-7:-1])}</span>"  # Show last 7 lines
             f"<span style='color: white;'>{' '}</span>"  # Set spacing between previous line and active line
             f"<span style='color: white;'>{' '.join(previous_text[:])}</span>"  # Last 20 spoken words
             f"<span style='color: cyan; font-weight: bold;'>{active_word}</span>"
             f"<span style='color: gray;'>{' '.join(upcoming_text[:])}</span>"  # Next 20 words
             f"<span style='color: gray;'>{' '.join(upcoming_lines[:7])}</span>"  # Show next 7 lines
-            # f"</div>"
+            f"</div>"
         )
 
         self.output_text.setHtml(transcript_html)

@@ -23,7 +23,7 @@ class HomeWidget(QWidget):
         layout = QVBoxLayout(self)
 
         # Create a label and a horizontal list (in icon mode) for recent videos.
-        layout.addWidget(QLabel("Recently Watched Videos"))
+        layout.addWidget(QLabel("Recently Cached Videos"))
         self.recent_list = QListWidget()
         self.recent_list.setViewMode(QListWidget.ViewMode.IconMode)
         self.recent_list.setResizeMode(QListWidget.ResizeMode.Adjust)
@@ -75,10 +75,7 @@ class HomeWidget(QWidget):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.settings = {
-            "font_size": 12,
-            "preferred_model": "tiny"
-        }
+        self.settings = load_settings()  # Load settings from file
         self.setWindowTitle("Lecture Videos Application")
         self.stack = QStackedWidget()
         self.setCentralWidget(self.stack)
@@ -102,9 +99,10 @@ class MainWindow(QMainWindow):
         dialog = SettingsDialog(self.settings, self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self.settings = dialog.get_settings()
+            save_settings(self.settings)  # Save settings to file
             # If the current page is the transcriber, update its settings.
             current_widget = self.stack.currentWidget()
-            if isinstance(current_widget, VideoTranscriber):
+            if hasattr(current_widget, "apply_settings"):
                 current_widget.apply_settings(self.settings)
 
     def open_video_transcriber(self, video_identifier):

@@ -44,7 +44,7 @@ python3 main.py
 - Currently processes one video at a time
 
 ## TODOs
-- Add audio and video cache
+- --Add audio and video cache--
 - RSS to eth websites
 - cache from rss videos + selection of which videos to play
 - Settings and advanced controls
@@ -52,3 +52,5 @@ python3 main.py
 - delete cache through GUI
 - Change pitch when speeding video
 - Increase video size
+- if not transcribed, pop up small window asking if transcribe or not
+- add missing time at the right of bar
