@@ -70,6 +70,10 @@ class HomeWidget(QWidget):
     def handle_item_clicked(self, item):
         video_path = item.data(Qt.ItemDataRole.UserRole)
         self.on_video_selected(video_path)
+    
+    def open_help_dialog(self):
+        dialog = HelpSection()
+        dialog.exec()
 
 # --- Main Window with Menu and Stacked Interface --- #
 class MainWindow(QMainWindow):
