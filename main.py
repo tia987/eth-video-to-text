@@ -1,19 +1,15 @@
-import sys, os, json, requests, threading
-import ffmpeg
-import whisper
+import sys, os
 
 from cache_handler import *
 from video_selection import *
 from video_transcriber import *
+from help_window import *
 from settings_window import *
 
-from PyQt6.QtWidgets import ( QApplication, QWidget, QStackedWidget, QVBoxLayout, QListWidget, QListWidgetItem,
-                              QPushButton, QLabel, QHBoxLayout, QLineEdit, QTextEdit, QComboBox, QSlider, QFileDialog,
-                              QMainWindow, QDialog )
+from PyQt6.QtWidgets import (QApplication, QWidget, QStackedWidget, QVBoxLayout, QListWidget, QListWidgetItem, QLabel,
+                             QMainWindow, QDialog, QTextBrowser)
 from PyQt6.QtGui import QIcon
-from PyQt6.QtCore import Qt, QUrl, QSize
-from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
-from PyQt6.QtMultimediaWidgets import QVideoWidget
+from PyQt6.QtCore import Qt, QSize
 
 # --- New Widget for Home Page with Recent Videos --- #
 class HomeWidget(QWidget):
@@ -21,9 +17,10 @@ class HomeWidget(QWidget):
         super().__init__(parent)
         self.on_video_selected = on_video_selected
         layout = QVBoxLayout(self)
+        layout_horizontal = QHBoxLayout(self)
 
         # Create a label and a horizontal list (in icon mode) for recent videos.
-        layout.addWidget(QLabel("Recently Cached Videos"))
+        layout_horizontal.addWidget(QLabel("Recently Cached Videos"))
         self.recent_list = QListWidget()
         self.recent_list.setViewMode(QListWidget.ViewMode.IconMode)
         self.recent_list.setResizeMode(QListWidget.ResizeMode.Adjust)
