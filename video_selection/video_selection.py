@@ -116,12 +116,12 @@ class AddVideoDialog(QDialog):
         if os.path.exists(cache_file):
             print(f"Loading cached transcription: {cache_file}")
             with open(cache_file, "r") as f:
-                transcript = json.load(f)
+                _ = json.load(f)
         else:
             print("Extracting audio...")
             self.extract_audio(video_path, audio_path)
             print("Transcribing audio...")
-            transcript = self.transcribe_audio(audio_path, video_path, model_name)
+            _ = self.transcribe_audio(audio_path, video_path, model_name)
         print("Transcription complete!")
     
     @staticmethod
