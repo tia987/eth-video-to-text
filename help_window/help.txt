@@ -1,0 +1,6 @@
+# Help section
+## How to start
+
+Click on **Save Video** to add a local video or paste a URl to download a video from the internet
+
+**Important:** the URL must finish with a .mp4 extension for a proper video transcription
