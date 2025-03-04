@@ -30,6 +30,12 @@ class HomeWidget(QWidget):
         self.recent_list.setMovement(QListWidget.Movement.Static)
         self.recent_list.setIconSize(QSize(160, 90))  # Adjust size as needed
 
+        # layout_horizontal.addWidget(QLabel("?"))
+        help_window = QPushButton("?")
+        help_window.clicked.connect(self.open_help_dialog)
+        layout_horizontal.addWidget(help_window, 0, Qt.AlignmentFlag.AlignRight)
+        layout.addLayout(layout_horizontal)
+
         # Populate recent videos by scanning the cache/videos folder.
         self.populate_recent_videos()
         self.recent_list.itemClicked.connect(self.handle_item_clicked)
