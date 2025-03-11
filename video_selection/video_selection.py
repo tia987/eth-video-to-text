@@ -107,6 +107,10 @@ class AddRSSDialog(QDialog):
         layout.addLayout(layout_horizontal)
         self.setLayout(layout)
 
+        # v_widget = QWidget()
+        # v_widget.setLayout(layout)
+        # v_widget.setFixedWidth(800)
+
     # Save RSS    
     def on_confirm(self):
         print(self.url_rss.text())
@@ -201,10 +205,13 @@ class AddVideoDialog(QDialog):
                 # Use the provided video name if available; otherwise use a default.
                 if not video_name or video_name.strip() == "":
                     video_name = "downloaded_video.mp4"
-                self.process_video(video_path, 'tiny', video_name)
+                self.process_video(video_path, 'tiny', 1, video_name) # TODO: use cached value
+            else :
+                self.process_video(video_path, 'tiny', 0, video_name) # TODO: use cached value
+
         self.accept()
     
-    def process_video(self, url_or_path, model_name, video_name="downloaded_video.mp4"):
+    def process_video(self, url_or_path, model_name, transcribe, video_name="downloaded_video.mp4"):
         # Add .mp4 if video_name doesn't have it
         if video_name != "":
             if not video_name.lower().endswith(".mp4"):
@@ -225,16 +232,17 @@ class AddVideoDialog(QDialog):
                 print("Video already downloaded, skipping download.")
 
         cache_file = get_cache_path(video_path, model_name)
-        if os.path.exists(cache_file):
-            print(f"Loading cached transcription: {cache_file}")
-            with open(cache_file, "r") as f:
-                _ = json.load(f)
-        else:
-            print("Extracting audio...")
-            self.extract_audio(video_path, audio_path)
-            print("Transcribing audio...")
-            _ = self.transcribe_audio(audio_path, video_path, model_name)
-        print("Transcription complete!")
+        if transcribe == 1:
+            if os.path.exists(cache_file):
+                print(f"Loading cached transcription: {cache_file}")
+                with open(cache_file, "r") as f:
+                    _ = json.load(f)
+            else:
+                print("Extracting audio...")
+                self.extract_audio(video_path, audio_path)
+                print("Transcribing audio...")
+                _ = self.transcribe_audio(audio_path, video_path, model_name)
+            print("Transcription complete!")
     
     @staticmethod
     def extract_audio(video_path, audio_path):
@@ -264,6 +272,8 @@ class VideoSelectionWidget(QWidget):
     def __init__(self, switch_to_transcriber_callback):
         super().__init__()
         self.switch_to_transcriber_callback = switch_to_transcriber_callback
+        self.rss_widget_open = 0
+        self.rss_widget_store = ''
         self.init_ui()
 
     def init_ui(self):
@@ -311,12 +321,12 @@ class VideoSelectionWidget(QWidget):
         self.setLayout(self.layout)
         self.setWindowTitle("Lecture Videos")        
     
-    def open_video(self):
-        current_item = self.video_list.currentItem()
-        if current_item:
-            video_identifier = current_item.text()
-            # In practice, use this identifier to look up the correct video URL/path.
-            self.switch_to_transcriber_callback(video_identifier)
+    # def open_video(self):
+    #     current_item = self.video_list.currentItem()
+    #     if current_item:
+    #         video_identifier = current_item.text()
+    #         # In practice, use this identifier to look up the correct video URL/path.
+    #         self.switch_to_transcriber_callback(video_identifier)
 
     def open_add_RSS_dialog(self):
         dialog = AddRSSDialog()
@@ -343,4 +353,9 @@ class VideoSelectionWidget(QWidget):
         
         # Create an instance of RSSVideoSelectionWidget with the file_path.
         rss_widget = RSSVideoSelectionWidget(file_path)
+        if self.rss_widget_open == 1:
+            self.layout.removeWidget(self.rss_widget_store)
+
         self.layout.addWidget(rss_widget)
+        self.rss_widget_store = rss_widget
+        self.rss_widget_open = 1
