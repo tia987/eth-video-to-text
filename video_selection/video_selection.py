@@ -65,8 +65,7 @@ class RSSVideoSelectionWidget(QWidget):
                     # Determine if the video is already cached.
                     # video_filename = os.path.basename(video_url)
                     # video_cache_path = os.path.join("cache/videos", video_filename)
-                    video_cache_path = os.path.join("cache/videos", title+".mp4")
-                    print(video_cache_path)
+                    video_cache_path = os.path.join("cache/videos", title + ".mp4")
                     if os.path.exists(video_cache_path):
                         item.setCheckState(Qt.CheckState.Checked)
                     else:
