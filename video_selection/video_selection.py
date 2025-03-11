@@ -1,4 +1,5 @@
-import os, json, ffmpeg, whisper
+import os, json, ffmpeg, whisper, feedparser
+
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QPushButton, QListWidget, QDialog, QLineEdit,
     QLabel, QCheckBox, QFileDialog, QHBoxLayout
@@ -8,6 +9,45 @@ from PyQt6.QtCore import QUrl
 
 from cache_handler import *
 from video_downloader import *
+
+class AddRSSDialog(QDialog):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Add RSS")
+        self.init_ui()
+    
+    def init_ui(self):
+        layout = QVBoxLayout()
+        layout_horizontal = QHBoxLayout()
+        
+        # URL input
+        self.url_rss = QLineEdit()
+        self.url_rss.setPlaceholderText("Enter RSS")
+        # layout_horizontal.addWidget(QLabel("RS:"))
+        layout_horizontal.addWidget(self.url_rss)
+
+        # Confirm button - calls our custom on_confirm method
+        self.confirm_button = QPushButton("Confirm")
+        self.confirm_button.clicked.connect(self.on_confirm)
+        layout.addWidget(self.confirm_button)
+
+        layout.addLayout(layout_horizontal)
+        self.setLayout(layout)
+
+    # Save RSS    
+    def on_confirm(self):
+        print(self.url_rss.text())
+        feed = feedparser.parse(self.url_rss.text())
+        title = feed.feed.get('title', "No channel title found")
+        # title.replace(" ", "_") # TODO: not working
+        title = ''.join([c for c in title if c.isupper()]) # Use only upper cases
+        if feed.bozo:
+            print("Error parsing RSS feed:", feed.bozo_exception)
+            return
+        
+        set_rss_cache(feed, title)
+        self.accept()
+       
 
 class AddVideoDialog(QDialog):
     def __init__(self):
@@ -156,21 +196,43 @@ class VideoSelectionWidget(QWidget):
 
     def init_ui(self):
         layout = QVBoxLayout()
+        layout_horizontal = QHBoxLayout()
         self.video_list = QListWidget()
-        # Populate with example lecture entries (you can replace these with real metadata)
-        self.video_list.addItem("Lecture 1: Introduction")
-        self.video_list.addItem("Lecture 2: Advanced Topics")
-        self.video_list.addItem("Lecture 3: Transcription Demo")
+
+        rss_dir = "cache/rss/"
+        if not os.path.exists(rss_dir):
+            return
+
+        # Loop through all cached RSS JSON files.
+        for filename in os.listdir(rss_dir):
+            if filename.endswith(".json"):
+                file_path = os.path.join(rss_dir, filename)
+                with open(file_path, "r", encoding="utf-8") as f:
+                    feed_data = json.load(f)
+                    # Get the list of entries
+                    feed_entries = feed_data.get('entries', [])
+                    if feed_entries:
+                        # Access the first entry and extract its title
+                        title = feed_entries[0].get('title', "Missing title")
+                    else:
+                        title = "Missing title"
+                    self.video_list.addItem(title)
+
         layout.addWidget(self.video_list)
         
         open_button = QPushButton("Open Selected Lecture")
         open_button.clicked.connect(self.open_video)
-        layout.addWidget(open_button)
+        layout_horizontal.addWidget(open_button)
+        
+        open_button = QPushButton("Save RSS")
+        open_button.clicked.connect(self.open_add_RSS_dialog)
+        layout_horizontal.addWidget(open_button)
 
         add_video_button = QPushButton("Save Video")
         add_video_button.clicked.connect(self.open_add_video_dialog)
-        layout.addWidget(add_video_button)
+        layout_horizontal.addWidget(add_video_button)
         
+        layout.addLayout(layout_horizontal)
         self.setLayout(layout)
         self.setWindowTitle("Lecture Videos")
     
@@ -181,6 +243,10 @@ class VideoSelectionWidget(QWidget):
             # In practice, use this identifier to look up the correct video URL/path.
             self.switch_to_transcriber_callback(video_identifier)
 
+    def open_add_RSS_dialog(self):
+        dialog = AddRSSDialog()
+        dialog.exec()
+        
     def open_add_video_dialog(self):
         dialog = AddVideoDialog()
         if dialog.exec():

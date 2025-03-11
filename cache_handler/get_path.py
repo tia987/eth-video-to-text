@@ -1,5 +1,5 @@
-
 import os
+
 from .video_hash import *  # Import hash function
 
 CACHE_DIR = "cache"  # Directory to store cached transcriptions
