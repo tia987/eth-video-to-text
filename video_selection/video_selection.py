@@ -8,6 +8,7 @@ from PyQt6.QtGui import QAction
 from PyQt6.QtCore import Qt
 
 from cache_handler import *
+from settings_window import *
 from video_downloader import *
 
 class RSSVideoSelectionWidget(QWidget):
@@ -202,13 +203,14 @@ class AddVideoDialog(QDialog):
     def on_confirm(self):
         video_path, transcribe_now, video_name = self.get_video_data()
         if video_path:
+            _, model = load_settings()
             if transcribe_now:
                 # Use the provided video name if available; otherwise use a default.
                 if not video_name or video_name.strip() == "":
                     video_name = "downloaded_video.mp4"
-                self.process_video(video_path, 'tiny', 1, video_name) # TODO: use cached value
+                self.process_video(video_path, model, 1, video_name)
             else :
-                self.process_video(video_path, 'tiny', 0, video_name) # TODO: use cached value
+                self.process_video(video_path, model, 0, video_name)
 
         self.accept()
     
