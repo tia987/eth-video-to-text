@@ -83,7 +83,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.settings = load_settings()  # Load settings from file
-        self.setWindowTitle("Lecture Videos Application")
+        self.setWindowTitle("Video Lectures Aggregator")
         self.stack = QStackedWidget()
         self.setCentralWidget(self.stack)
         self.init_ui()
