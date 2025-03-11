@@ -7,76 +7,9 @@ from help_window import *
 from settings_window import *
 
 from PyQt6.QtWidgets import (QApplication, QWidget, QStackedWidget, QVBoxLayout, QListWidget, QListWidgetItem, QLabel,
-                             QMainWindow, QDialog, QTextBrowser)
+                             QMainWindow, QDialog)
 from PyQt6.QtGui import QIcon
 from PyQt6.QtCore import Qt, QSize
-
-class RSSVideoSelectionWidget(QWidget):
-    """
-    This widget shows a list of videos from cached RSS feeds.
-    Videos that have already been downloaded (cached) are marked with a check.
-    Clicking an item opens AddVideoDialog with the video URL pre-populated.
-    """
-    def __init__(self, parent=None):
-        super().__init__()
-        self.init_ui()
-    
-    def init_ui(self):
-        layout = QVBoxLayout(self)
-        self.video_list = QListWidget()
-        layout.addWidget(self.video_list)
-        self.populate_list()
-        self.video_list.itemClicked.connect(self.item_clicked)
-        self.setLayout(layout)
-    
-    def populate_list(self):
-        # Directory where RSS JSON files are stored.
-        rss_dir = "cache/rss/"
-        if not os.path.exists(rss_dir):
-            return
-
-        # Loop through all cached RSS JSON files.
-        for filename in os.listdir(rss_dir):
-            if filename.endswith(".json"):
-                file_path = os.path.join(rss_dir, filename)
-                with open(file_path, "r", encoding="utf-8") as f:
-                    feed_data = json.load(f)
-                    # Loop through the entries in this RSS feed.
-                    for entry in feed_data.get("entries", []):
-                        title = entry.get("title", "Missing title")
-                        date = entry.get("published_parsed", "No date")
-                        date = "_" + str(date[2]) + "-" + str(date[1]) + "-" + str(date[0])
-                        title = ''.join([c for c in title if c.isupper()]) # Use only upper cases
-                        title = title + date
-                        video_url = entry.get("link", "")
-                        if not video_url:
-                            continue
-                        
-                        item = QListWidgetItem(title)
-                        # Store the video URL in the item for later use.
-                        item.setData(Qt.ItemDataRole.UserRole, video_url)
-                        
-                        # Make the item checkable.
-                        item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
-                        
-                        # Determine if the video is already cached.
-                        video_filename = os.path.basename(video_url)
-                        video_cache_path = os.path.join("cache/videos", video_filename)
-                        if os.path.exists(video_cache_path):
-                            item.setCheckState(Qt.CheckState.Checked)
-                        else:
-                            item.setCheckState(Qt.CheckState.Unchecked)
-                        
-                        self.video_list.addItem(item)
-    
-    def item_clicked(self, item):
-        # Retrieve the video URL from the clicked item.
-        video_url = item.data(Qt.ItemDataRole.UserRole)
-        # Open the AddVideoDialog with the URL pre-filled.
-        dialog = AddVideoDialog()
-        dialog.url_entry.setText(video_url)
-        dialog.exec()
-
 
 # --- New Widget for Home Page with Recent Videos --- #
 class HomeWidget(QWidget):
@@ -106,14 +39,9 @@ class HomeWidget(QWidget):
         layout.addWidget(self.recent_list)
 
         # Optionally, add the existing video selection widget below the recent videos.
-        layout.addWidget(QLabel("Browse Videos"))
+        layout.addWidget(QLabel("RSS Feeds"))
         self.selection_widget = VideoSelectionWidget(self.on_video_selected)
         layout.addWidget(self.selection_widget)
-
-        # --- RSS Video Selection Widget --- #
-        layout.addWidget(QLabel("Browse Videos from RSS Feed"))
-        self.rss_selection_widget = RSSVideoSelectionWidget(self.on_video_selected)
-        layout.addWidget(self.rss_selection_widget)
 
     def populate_recent_videos(self):
         # Construct the videos directory path.

@@ -2,13 +2,87 @@ import os, json, ffmpeg, whisper, feedparser
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QPushButton, QListWidget, QDialog, QLineEdit,
-    QLabel, QCheckBox, QFileDialog, QHBoxLayout
+    QLabel, QCheckBox, QFileDialog, QHBoxLayout, QListWidgetItem
 )
 from PyQt6.QtGui import QAction
-from PyQt6.QtCore import QUrl
+from PyQt6.QtCore import Qt
 
 from cache_handler import *
 from video_downloader import *
+
+class RSSVideoSelectionWidget(QWidget):
+    """
+    This widget shows a list of videos from cached RSS feeds.
+    Videos that have already been downloaded (cached) are marked with a check.
+    Clicking an item opens AddVideoDialog with the video URL pre-populated.
+    """
+    def __init__(self, filename, parent=None):
+        super().__init__()
+        self.filename = filename
+        self.init_ui()
+    
+    def init_ui(self):
+        layout = QVBoxLayout(self)
+        self.video_list = QListWidget()
+        self.populate_list()
+        layout.addWidget(self.video_list)
+        self.video_list.itemClicked.connect(self.item_clicked)
+        self.setLayout(layout)
+    
+    def populate_list(self):
+        # Directory where RSS JSON files are stored.
+        rss_dir = "cache/rss/"
+        if not os.path.exists(rss_dir):
+            return
+
+        # Loop through all cached RSS JSON files.
+        # for filename in os.listdir(rss_dir):
+        if self.filename.endswith(".json"):
+            # file_path = os.path.join(rss_dir, self.filename)
+            file_path = self.filename
+            with open(file_path, "r", encoding="utf-8") as f:
+                feed_data = json.load(f)
+                # Loop through the entries in this RSS feed.
+                for entry in feed_data.get("entries", []):
+                    title = entry.get("title", "Missing title")
+                    date = entry.get("published_parsed", "No date")
+                    date = "_" + str(date[2]) + "-" + str(date[1]) + "-" + str(date[0])
+                    title = ''.join([c for c in title if c.isupper()]) # Use only upper cases
+                    title = title + date
+                    video_url = entry.get("link", "")
+                    if not video_url:
+                        continue
+                    
+                    item = QListWidgetItem(title)
+                    # Store the video URL in the item for later use.
+                    item.setData(Qt.ItemDataRole.UserRole + 1, title)
+                    item.setData(Qt.ItemDataRole.UserRole, video_url)
+                    
+                    # Make the item checkable.
+                    item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+                    # item.setFlags((item.flags() | Qt.ItemFlag.ItemIsUserCheckable) & ~Qt.ItemFlag.ItemIsEnabled)
+                    
+                    # Determine if the video is already cached.
+                    # video_filename = os.path.basename(video_url)
+                    # video_cache_path = os.path.join("cache/videos", video_filename)
+                    video_cache_path = os.path.join("cache/videos", title+".mp4")
+                    print(video_cache_path)
+                    if os.path.exists(video_cache_path):
+                        item.setCheckState(Qt.CheckState.Checked)
+                    else:
+                        item.setCheckState(Qt.CheckState.Unchecked)
+                    
+                    self.video_list.addItem(item)
+    
+    def item_clicked(self, item):
+        # Retrieve the video URL from the clicked item.
+        name_entry = item.data(Qt.ItemDataRole.UserRole + 1)
+        video_url = item.data(Qt.ItemDataRole.UserRole)
+        # Open the AddVideoDialog with the URL pre-filled.
+        dialog = AddVideoDialog()
+        dialog.name_entry.setText(name_entry)
+        dialog.url_entry.setText(video_url)
+        dialog.exec()
 
 class AddRSSDialog(QDialog):
     def __init__(self):
@@ -92,7 +166,6 @@ class AddVideoDialog(QDialog):
         self.confirm_button = QPushButton("Save Video")
         self.confirm_button.clicked.connect(self.on_confirm)
         layout.addWidget(self.confirm_button)
-        
         self.setLayout(layout)
         
         # When the URL entry changes, check whether to show the video name fields.
@@ -195,7 +268,7 @@ class VideoSelectionWidget(QWidget):
         self.init_ui()
 
     def init_ui(self):
-        layout = QVBoxLayout()
+        self.layout = QVBoxLayout()
         layout_horizontal = QHBoxLayout()
         self.video_list = QListWidget()
 
@@ -216,13 +289,16 @@ class VideoSelectionWidget(QWidget):
                         title = feed_entries[0].get('title', "Missing title")
                     else:
                         title = "Missing title"
-                    self.video_list.addItem(title)
+                    item = QListWidgetItem(title)
+                    item.setData(Qt.ItemDataRole.UserRole, file_path)
+                    self.video_list.addItem(item)
 
-        layout.addWidget(self.video_list)
+        self.layout.addWidget(self.video_list)
+        self.video_list.itemClicked.connect(self.feed_clicked)
         
-        open_button = QPushButton("Open Selected Lecture")
-        open_button.clicked.connect(self.open_video)
-        layout_horizontal.addWidget(open_button)
+        # open_button = QPushButton("Open Selected Lecture")
+        # open_button.clicked.connect(self.open_video)
+        # layout_horizontal.addWidget(open_button)
         
         open_button = QPushButton("Save RSS")
         open_button.clicked.connect(self.open_add_RSS_dialog)
@@ -232,9 +308,9 @@ class VideoSelectionWidget(QWidget):
         add_video_button.clicked.connect(self.open_add_video_dialog)
         layout_horizontal.addWidget(add_video_button)
         
-        layout.addLayout(layout_horizontal)
-        self.setLayout(layout)
-        self.setWindowTitle("Lecture Videos")
+        self.layout.addLayout(layout_horizontal)
+        self.setLayout(self.layout)
+        self.setWindowTitle("Lecture Videos")        
     
     def open_video(self):
         current_item = self.video_list.currentItem()
@@ -255,3 +331,17 @@ class VideoSelectionWidget(QWidget):
                 self.video_list.addItem(video_path)  # Add to the list
                 if transcribe_now:
                     self.switch_to_transcriber_callback(video_path)
+
+    def feed_clicked(self, item):
+        """When a feed is clicked, load its lessons and display them below."""
+        file_path = item.data(Qt.ItemDataRole.UserRole)
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                feed_data = json.load(f)
+        except Exception as e:
+            print(f"Error loading feed {file_path}: {e}")
+            return
+        
+        # Create an instance of RSSVideoSelectionWidget with the file_path.
+        rss_widget = RSSVideoSelectionWidget(file_path)
+        self.layout.addWidget(rss_widget)
