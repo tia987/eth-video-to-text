@@ -70,18 +70,24 @@ class RSSVideoSelectionWidget(QWidget):
                         item.setCheckState(Qt.CheckState.Checked)
                     else:
                         item.setCheckState(Qt.CheckState.Unchecked)
-                    
+                    item.setData(Qt.ItemDataRole.UserRole + 2, title)
+
                     self.video_list.addItem(item)
     
     def item_clicked(self, item):
         # Retrieve the video URL from the clicked item.
+        video_cache_path = item.data(Qt.ItemDataRole.UserRole + 2)
         name_entry = item.data(Qt.ItemDataRole.UserRole + 1)
         video_url = item.data(Qt.ItemDataRole.UserRole)
+        # Check if video is downloaded in cache and open players
+        if os.path.exists("cache/videos/" + video_cache_path + ".mp4"):
+            return
         # Open the AddVideoDialog with the URL pre-filled.
-        dialog = AddVideoDialog()
-        dialog.name_entry.setText(name_entry)
-        dialog.url_entry.setText(video_url)
-        dialog.exec()
+        else :
+            dialog = AddVideoDialog()
+            dialog.name_entry.setText(name_entry)
+            dialog.url_entry.setText(video_url)
+            dialog.exec()
 
 class AddRSSDialog(QDialog):
     def __init__(self):
@@ -107,10 +113,6 @@ class AddRSSDialog(QDialog):
         layout.addLayout(layout_horizontal)
         self.setLayout(layout)
 
-        # v_widget = QWidget()
-        # v_widget.setLayout(layout)
-        # v_widget.setFixedWidth(800)
-
     # Save RSS    
     def on_confirm(self):
         print(self.url_rss.text())
@@ -124,7 +126,6 @@ class AddRSSDialog(QDialog):
         
         set_rss_cache(feed, title)
         self.accept()
-       
 
 class AddVideoDialog(QDialog):
     def __init__(self):
