@@ -1,6 +1,3 @@
-from video_transcriber import *
-from video_selection import *
-
 from PyQt6.QtWidgets import (QVBoxLayout,QPushButton, QLabel, QHBoxLayout, QComboBox, QSpinBox, QDialog)
 
 # --- Settings Dialog --- #

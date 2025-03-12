@@ -1,4 +1,4 @@
-import os
+import os, whisper, ffmpeg, json
 
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton, QTextEdit, QComboBox, 
                              QFileDialog, QHBoxLayout, QSlider)
@@ -7,13 +7,8 @@ from PyQt6.QtMultimediaWidgets import QVideoWidget
 from PyQt6.QtCore import QUrl, Qt
 
 from cache_handler import *
-from video_transcriber import *
 from video_downloader import *
 from settings_window import *
-
-import whisper
-import ffmpeg
-import json
 
 CONFIG_FILE = "cache/config.json"
 
