@@ -10,6 +10,10 @@ from PyQt6.QtCore import Qt
 from cache_handler import *
 from video_downloader import *
 from settings_window import *
+from video_transcriber import *
+
+RSS_DIR = "cache/rss/"
+URL_DIR = "cache/url/"
 
 class RSSVideoSelectionWidget(QWidget):
     """
@@ -17,9 +21,10 @@ class RSSVideoSelectionWidget(QWidget):
     Videos that have already been downloaded (cached) are marked with a check.
     Clicking an item opens AddVideoDialog with the video URL pre-populated.
     """
-    def __init__(self, filename, parent=None):
+    def __init__(self, filename, switch_to_transcriber_callback, parent=None):
         super().__init__()
         self.filename = filename
+        self.switch_to_transcriber_callback = switch_to_transcriber_callback
         self.init_ui()
     
     def init_ui(self):
@@ -32,8 +37,7 @@ class RSSVideoSelectionWidget(QWidget):
     
     def populate_list(self):
         # Directory where RSS JSON files are stored.
-        rss_dir = "cache/rss/"
-        if not os.path.exists(rss_dir):
+        if not os.path.exists(RSS_DIR):
             return
 
         # Loop through all cached RSS JSON files.
@@ -74,15 +78,18 @@ class RSSVideoSelectionWidget(QWidget):
                     item.setData(Qt.ItemDataRole.UserRole + 2, title)
 
                     self.video_list.addItem(item)
-    
+
     def item_clicked(self, item):
         # Retrieve the video URL from the clicked item.
         video_cache_path = item.data(Qt.ItemDataRole.UserRole + 2)
         name_entry = item.data(Qt.ItemDataRole.UserRole + 1)
         video_url = item.data(Qt.ItemDataRole.UserRole)
         # Check if video is downloaded in cache and open players
-        if os.path.exists("cache/videos/" + video_cache_path + ".mp4"):
-            return
+        video_cache_path = "cache/videos/" + video_cache_path + ".mp4" 
+        if os.path.exists(video_cache_path):
+            # return the video and opens it directly in the transcriber
+            self.switch_to_transcriber_callback(video_cache_path)
+
         # Open the AddVideoDialog with the URL pre-filled.
         else :
             dialog = AddVideoDialog()
@@ -116,16 +123,18 @@ class AddRSSDialog(QDialog):
 
     # Save RSS    
     def on_confirm(self):
-        print(self.url_rss.text())
         feed = feedparser.parse(self.url_rss.text())
+        
         title = feed.feed.get('title', "No channel title found")
-        # title.replace(" ", "_") # TODO: not working
         title = ''.join([c for c in title if c.isupper()]) # Use only upper cases
         if feed.bozo:
             print("Error parsing RSS feed:", feed.bozo_exception)
             return
-        
         set_rss_cache(feed, title)
+        
+        # Save feed's url for future updates
+        set_rss_url_cache(self.url_rss.text(), title)
+
         self.accept()
 
 class AddVideoDialog(QDialog):
@@ -278,6 +287,7 @@ class VideoSelectionWidget(QWidget):
         self.switch_to_transcriber_callback = switch_to_transcriber_callback
         self.rss_widget_open = 0
         self.rss_widget_store = ''
+        self.refresh_rss_list()
         self.init_ui()
 
     def init_ui(self):
@@ -285,14 +295,13 @@ class VideoSelectionWidget(QWidget):
         layout_horizontal = QHBoxLayout()
         self.video_list = QListWidget()
 
-        rss_dir = "cache/rss/"
-        if not os.path.exists(rss_dir):
+        if not os.path.exists(RSS_DIR):
             return
 
         # Loop through all cached RSS JSON files.
-        for filename in os.listdir(rss_dir):
+        for filename in os.listdir(RSS_DIR):
             if filename.endswith(".json"):
-                file_path = os.path.join(rss_dir, filename)
+                file_path = os.path.join(RSS_DIR, filename)
                 with open(file_path, "r", encoding="utf-8") as f:
                     feed_data = json.load(f)
                     # Get the list of entries
@@ -302,6 +311,10 @@ class VideoSelectionWidget(QWidget):
                         title = feed_entries[0].get('title', "Missing title")
                     else:
                         title = "Missing title"
+
+                    # TODO: Add number of how many videos are not cached
+
+                    
                     item = QListWidgetItem(title)
                     item.setData(Qt.ItemDataRole.UserRole, file_path)
                     self.video_list.addItem(item)
@@ -323,14 +336,31 @@ class VideoSelectionWidget(QWidget):
         
         self.layout.addLayout(layout_horizontal)
         self.setLayout(self.layout)
-        self.setWindowTitle("Lecture Videos")        
+        self.setWindowTitle("Lecture Videos")   
     
-    # def open_video(self):
-    #     current_item = self.video_list.currentItem()
-    #     if current_item:
-    #         video_identifier = current_item.text()
-    #         # In practice, use this identifier to look up the correct video URL/path.
-    #         self.switch_to_transcriber_callback(video_identifier)
+    def refresh_rss_list(self):
+        if not os.path.exists(URL_DIR):
+            return
+        
+        # Use feedparser to update the rss
+        for filename in os.listdir(URL_DIR):
+            if filename.endswith(".json"):
+                file_path = os.path.join(URL_DIR, filename)
+                try:
+                    with open(file_path, "r", encoding="utf-8") as f:
+                        feed_url = json.load(f)
+                    feed = feedparser.parse(feed_url)
+                    
+                except Exception as e:
+                    print(f"Error reading {file_path}: {e}")
+                    title = "Error loading feed"
+                
+                title = feed.feed.get('title', "No channel title found")
+                title = ''.join([c for c in title if c.isupper()]) # Use only upper cases
+                if feed.bozo:
+                    print("Error parsing RSS feed:", feed.bozo_exception)
+                    return
+                set_rss_cache(feed, title)
 
     def open_add_RSS_dialog(self):
         dialog = AddRSSDialog()
@@ -356,7 +386,7 @@ class VideoSelectionWidget(QWidget):
             return
         
         # Create an instance of RSSVideoSelectionWidget with the file_path.
-        rss_widget = RSSVideoSelectionWidget(file_path)
+        rss_widget = RSSVideoSelectionWidget(file_path, self.switch_to_transcriber_callback)
         if self.rss_widget_open == 1:
             self.layout.removeWidget(self.rss_widget_store)
 
