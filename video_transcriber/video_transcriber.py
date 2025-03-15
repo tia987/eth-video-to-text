@@ -233,7 +233,7 @@ class VideoTranscriber(QWidget):
             f"<span style='color: white;'>{' '.join(previous_lines[-7:-1])}</span>"  # Show last 7 lines
             f"<span style='color: white;'>{' '}</span>"  # Set spacing between previous line and active line
             f"<span style='color: white;'>{' '.join(previous_text[:])}</span>"
-            f"<span style='color: cyan; font-weight: bold;'>{active_word}</span>"
+            f"<span style='color: cyan;'>{active_word}</span>"
             f"<span style='color: gray;'>{' '.join(upcoming_text[:])}</span>" 
             f"<span style='color: gray;'>{' '.join(upcoming_lines[:7])}</span>"  # Show next 7 lines
             f"</div>"
