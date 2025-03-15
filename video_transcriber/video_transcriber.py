@@ -10,8 +10,6 @@ from cache_handler import *
 from video_downloader import *
 from settings_window import *
 
-CONFIG_FILE = "cache/config.json"
-
 def extract_audio(video_path, audio_path):
     try:
         (

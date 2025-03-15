@@ -12,9 +12,6 @@ from video_downloader import *
 from settings_window import *
 from video_transcriber import *
 
-RSS_DIR = "cache/rss/"
-URL_DIR = "cache/url/"
-
 class RSSVideoSelectionWidget(QWidget):
     """
     This widget shows a list of videos from cached RSS feeds.

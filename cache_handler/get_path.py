@@ -1,8 +1,8 @@
 import os
 
 from .video_hash import *  # Import hash function
+from .cache_directories import *  # Import hash function
 
-CACHE_DIR = "cache"  # Directory to store cached transcriptions
 os.makedirs(CACHE_DIR, exist_ok=True)  # Ensure the cache directory exists
 
 def get_cache_path(video_path, model_name):
