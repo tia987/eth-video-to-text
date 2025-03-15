@@ -1,4 +1,4 @@
-import sys, os, feedparser
+import sys, os
 
 from cache_handler import *
 from video_selection import *
