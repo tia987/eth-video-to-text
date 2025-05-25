@@ -127,6 +127,16 @@ class MainWindow(QMainWindow):
         self.stack.setCurrentWidget(self.home_widget)
 
 if __name__ == '__main__':
+    # Create the cache directory starting the program the first time
+    try:
+        os.makedirs(CACHE_DIR)
+        print(f"Directory '{CACHE_DIR}' created successfully.")
+    except FileExistsError:
+        print(f"Directory '{CACHE_DIR}' already exists.")
+
+    os.makedirs(VIDEO_DIR, exist_ok=True)  # Ensure the cache directory existss
+    os.makedirs(TRANSCRIPT_DIR, exist_ok=True)  # Ensure the cache directory existss
+
     app = QApplication(sys.argv)
     window = MainWindow()
     window.resize(900, 600)

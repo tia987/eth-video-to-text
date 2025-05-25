@@ -4,11 +4,32 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButto
                              QFileDialog, QHBoxLayout, QSlider)
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 from PyQt6.QtMultimediaWidgets import QVideoWidget
-from PyQt6.QtCore import QUrl, Qt, QTimer
+from PyQt6.QtCore import QUrl, Qt
 
 from cache_handler import *
 from video_downloader import *
 from settings_window import *
+
+# File to store last positions for videos
+POSITION_FILE = "last_position.json"
+
+def load_last_position(video_path):
+    try:
+        with open(POSITION_FILE, "r") as f:
+            data = json.load(f)
+    except Exception:
+        data = {}
+    return data.get(video_path, 0)
+
+def save_last_position(video_path, position):
+    try:
+        with open(POSITION_FILE, "r") as f:
+            data = json.load(f)
+    except Exception:
+        data = {}
+    data[video_path] = position
+    with open(POSITION_FILE, "w") as f:
+        json.dump(data, f)
 
 def extract_audio(video_path, audio_path):
     try:
@@ -22,7 +43,7 @@ def extract_audio(video_path, audio_path):
     except ffmpeg.Error as e:
         print(f"Error: {e.stderr.decode()}")
 
-def transcribe_audio(audio_path, video_path,model_name):
+def transcribe_audio(audio_path, video_path, model_name):
     """Check cache before running Whisper AI and save transcription if not cached."""
     cache_file = get_cache_path(video_path, model_name)
     
@@ -61,7 +82,7 @@ class VideoTranscriber(QWidget):
         # Left Section (Video Player Section)
         self.video_widget = QVideoWidget()
         horizontal_layout_1.addLayout(vertical_layout_2, 2)
-        vertical_layout_2.addWidget(self.video_widget)
+        vertical_layout_2.addWidget(self.video_widget, stretch=9)
         vertical_layout_2.addLayout(horizontal_layout_2)
         
         self.media_player = QMediaPlayer()
@@ -106,6 +127,10 @@ class VideoTranscriber(QWidget):
         self.position_slider.sliderMoved.connect(self.set_position)
         horizontal_layout_2.addWidget(self.position_slider, 1)
         
+        # --- NEW: Time display label to show "current / total" ---
+        self.time_label = QLabel("0:00 / 0:00")
+        horizontal_layout_2.addWidget(self.time_label, 0, Qt.AlignmentFlag.AlignRight)
+        
         self.output_text = QTextEdit()
         self.output_text.setReadOnly(True)
         vertical_layout_1.addWidget(self.output_text)
@@ -127,7 +152,7 @@ class VideoTranscriber(QWidget):
         self.setWindowTitle("Video Transcriber")
         self.resize(900, 600)
 
-        # Update slider with video progress
+        # Update slider with video progress and time display
         self.media_player.positionChanged.connect(self.update_transcription)
         self.media_player.positionChanged.connect(self.update_slider)
         self.media_player.durationChanged.connect(self.set_slider_range)
@@ -175,8 +200,14 @@ class VideoTranscriber(QWidget):
             self.transcription_segments = transcript["segments"]
             self.current_index = 0
             self.media_player.setSource(QUrl.fromLocalFile(video_path))
+            
+            # --- NEW: Load last saved position (if available) ---
+            last_position = load_last_position(video_path)
+            if last_position:
+                self.media_player.setPosition(last_position)
+            
             self.media_player.play()
-            # self.update_transcription() # BUG: Causes crash we reloading the page
+            self.update_transcription(self.media_player.position())
         except Exception as e:
             self.output_text.setText(f"Error: {str(e)}")
 
@@ -208,8 +239,7 @@ class VideoTranscriber(QWidget):
                 
                 previous_text = words[:word_index]
                 previous_text.append(' ')
-                active_word = words[word_index]
-                active_word += " "
+                active_word = words[word_index] + " "
                 upcoming_text = words[word_index + 1:]
                 break
             # elif segment['start'] < current_time:
@@ -254,10 +284,15 @@ class VideoTranscriber(QWidget):
     
     def update_slider(self, position):
         self.position_slider.setValue(position)
+        # --- NEW: Update time label ---
+        duration = self.media_player.duration()
+        self.time_label.setText(f"{self.format_time(position)} / {self.format_time(duration)}")
     
     def set_slider_range(self, duration):
         self.position_slider.setRange(0, duration)
-
+        # Also update the time label initially
+        self.time_label.setText(f"{self.format_time(0)} / {self.format_time(duration)}")
+    
     def toggle_playback(self):
         if self.media_player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
             self.media_player.pause()
@@ -274,6 +309,20 @@ class VideoTranscriber(QWidget):
         }
         selected_speed = self.speed_combo.currentText()
         self.media_player.setPlaybackRate(speed_map[selected_speed])
+
+    def format_time(self, ms):
+        """Helper function to format milliseconds into mm:ss string."""
+        seconds = ms // 1000
+        minutes = seconds // 60
+        seconds = seconds % 60
+        return f"{int(minutes)}:{int(seconds):02d}"
+    
+    def closeEvent(self, event):
+        # --- NEW: Save current video position when widget is closed ---
+        current_video = self.url_entry.text()
+        current_position = self.media_player.position()
+        save_last_position(current_video, current_position)
+        event.accept()
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key.Key_Space:

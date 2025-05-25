@@ -1,6 +1,6 @@
 import os, json
 
-CONFIG_FILE = "cache/config.json"
+from cache_handler import *
 
 def load_settings():
     if os.path.exists(CONFIG_FILE):

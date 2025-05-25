@@ -2,7 +2,6 @@ vtt/
 *.wav
 *.mp4
 
-cache/
 __pycache__/
 
 .DS_Store

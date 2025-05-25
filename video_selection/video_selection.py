@@ -2,9 +2,9 @@ import os, json, ffmpeg, whisper, feedparser
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QPushButton, QListWidget, QDialog, QLineEdit,
-    QLabel, QCheckBox, QFileDialog, QHBoxLayout, QListWidgetItem
+    QLabel, QCheckBox, QFileDialog, QHBoxLayout, QListWidgetItem, QProgressBar
 )
-from PyQt6.QtGui import QAction
+from PyQt6.QtGui import QAction, QColor
 from PyQt6.QtCore import Qt
 
 from cache_handler import *
@@ -12,82 +12,160 @@ from video_downloader import *
 from settings_window import *
 from video_transcriber import *
 
+# Supported Whisper models
+MODELS = ["tiny", "base", "small", "medium", "large", "turbo"]
+
 class RSSVideoSelectionWidget(QWidget):
     """
-    This widget shows a list of videos from cached RSS feeds.
-    Videos that have already been downloaded (cached) are marked with a check.
-    Clicking an item opens AddVideoDialog with the video URL pre-populated.
+    Shows a checkable, multi-select list of videos from cached RSS feeds,
+    with batch actions and color-coding:
+      - White: transcript exists
+      - Grey: downloaded but not transcribed
+      - Red: not downloaded
     """
     def __init__(self, filename, switch_to_transcriber_callback, parent=None):
         super().__init__()
         self.filename = filename
         self.switch_to_transcriber_callback = switch_to_transcriber_callback
         self.init_ui()
-    
+        self.populate_list()
+
     def init_ui(self):
         layout = QVBoxLayout(self)
+
+        # Buttons for batch operations
+        btn_layout = QHBoxLayout()
+        self.download_btn = QPushButton("Download Selected")
+        self.delete_btn = QPushButton("Delete Selected")
+        self.select_all_btn = QPushButton("Select All")
+        btn_layout.addWidget(self.download_btn)
+        btn_layout.addWidget(self.delete_btn)
+        btn_layout.addWidget(self.select_all_btn)
+        layout.addLayout(btn_layout)
+
+        # Video list
         self.video_list = QListWidget()
-        self.populate_list()
+        self.video_list.setSelectionMode(QListWidget.SelectionMode.NoSelection)
         layout.addWidget(self.video_list)
-        self.video_list.itemClicked.connect(self.item_clicked)
+        # self.populate_list()
+
+        # Connect signals
+        self.download_btn.clicked.connect(self.download_selected)
+        self.delete_btn.clicked.connect(self.delete_selected)
+        self.select_all_btn.clicked.connect(self.select_all)
+        self.video_list.itemClicked.connect(self.on_item_clicked)
+        self.video_list.itemDoubleClicked.connect(self.on_item_double_clicked)
+
         self.setLayout(layout)
-    
+
     def populate_list(self):
-        # Directory where RSS JSON files are stored.
-        if not os.path.exists(RSS_DIR):
+        self.video_list.clear()
+        if not os.path.exists(self.filename):
             return
 
-        # Loop through all cached RSS JSON files.
-        # for filename in os.listdir(rss_dir):
-        if self.filename.endswith(".json"):
-            # file_path = os.path.join(rss_dir, self.filename)
-            file_path = self.filename
-            with open(file_path, "r", encoding="utf-8") as f:
-                feed_data = json.load(f)
-                # Loop through the entries in this RSS feed.
-                for entry in feed_data.get("entries", []):
-                    title = entry.get("title", "Missing title")
-                    date = entry.get("published_parsed", "No date")
-                    date = "_" + str(date[2]) + "-" + str(date[1]) + "-" + str(date[0])
-                    title = ''.join([c for c in title if c.isupper()]) # Use only upper cases
-                    title = title + date
-                    video_url = entry.get("link", "")
-                    if not video_url:
-                        continue
-                    
-                    item = QListWidgetItem(title)
-                    # Store the video URL in the item for later use.
-                    item.setData(Qt.ItemDataRole.UserRole + 1, title)
-                    item.setData(Qt.ItemDataRole.UserRole, video_url)
-                    
-                    # Make the item checkable.
-                    item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
-                    # item.setFlags((item.flags() | Qt.ItemFlag.ItemIsUserCheckable) & ~Qt.ItemFlag.ItemIsEnabled)
-                    
-                    # Determine if the video is already cached.
-                    # video_filename = os.path.basename(video_url)
-                    # video_cache_path = os.path.join("cache/videos", video_filename)
-                    video_cache_path = os.path.join("cache/videos", title + ".mp4")
-                    if os.path.exists(video_cache_path):
-                        item.setCheckState(Qt.CheckState.Checked)
-                    else:
-                        item.setCheckState(Qt.CheckState.Unchecked)
-                    item.setData(Qt.ItemDataRole.UserRole + 2, title)
+        with open(self.filename, "r", encoding="utf-8") as f:
+            feed_data = json.load(f)
 
-                    self.video_list.addItem(item)
+        for entry in feed_data.get("entries", []):
+            title = entry.get("title", "Missing title")
+            date = entry.get("published_parsed")
+            date_str = f"_{date[2]}-{date[1]}-{date[0]}" if date else ""
+            key = ''.join(c for c in title if c.isupper()) + date_str
+            url = entry.get("link")
+            if not url:
+                continue
 
-    def item_clicked(self, item):
+            item = QListWidgetItem(key)
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsSelectable)
+            item.setCheckState(Qt.CheckState.Unchecked)
+            item.setData(Qt.ItemDataRole.UserRole, url)
+
+            # Paths
+            video_path = os.path.join(VIDEO_DIR, f"{key}.mp4")
+            # Look for any transcript file matching key_model.json
+            transcript_exists = False
+            if os.path.isdir(TRANSCRIPT_DIR):
+                for fname in os.listdir(TRANSCRIPT_DIR):
+                    base, ext = os.path.splitext(fname)
+                    if ext.lower() == ".json" and base.startswith(f"{key}_"):
+                        # Check suffix matches model
+                        suffix = base[len(key) + 1:]
+                        if suffix in MODELS:
+                            transcript_exists = True
+                            break
+
+            # Color based on status
+            if os.path.exists(video_path) and transcript_exists:
+                item.setForeground(QColor("white"))
+            elif os.path.exists(video_path):
+                item.setForeground(QColor("grey"))
+            else:
+                item.setForeground(QColor("red"))
+
+            self.video_list.addItem(item)
+
+    def uncheck_all(self):
+        for i in range(self.video_list.count()):
+            self.video_list.item(i).setCheckState(Qt.CheckState.Unchecked)
+
+    def select_all(self):
+        count = self.video_list.count()
+        all_checked = all(
+            self.video_list.item(i).checkState() == Qt.CheckState.Checked
+            for i in range(count)
+        )
+        new_state = Qt.CheckState.Unchecked if all_checked else Qt.CheckState.Checked
+        for i in range(count):
+            self.video_list.item(i).setCheckState(new_state)
+
+    def download_selected(self):
+        for i in range(self.video_list.count()):
+            item = self.video_list.item(i)
+            if item.checkState() == Qt.CheckState.Checked:
+                url = item.data(Qt.ItemDataRole.UserRole)
+                key = item.text()
+                video_path = os.path.join(VIDEO_DIR, f"{key}.mp4")
+                if not os.path.exists(video_path):
+                    download_video(url, video_path)
+        self.uncheck_all()
+        self.populate_list()
+
+    def delete_selected(self):
+        for i in range(self.video_list.count()):
+            item = self.video_list.item(i)
+            if item.checkState() == Qt.CheckState.Checked:
+                key = item.text()
+                video_path = os.path.join(VIDEO_DIR, f"{key}.mp4")
+                # Eliminate video
+                if os.path.exists(video_path):
+                    os.remove(video_path)
+
+                # Eliminate transcript
+                for fname in os.listdir(TRANSCRIPT_DIR):
+                    base, ext = os.path.splitext(fname)
+                    if ext.lower() == ".json" and base.startswith(f"{key}_"):
+                        # Check suffix matches model
+                        suffix = base[len(key) + 1:]
+                        if suffix in MODELS:
+                            os.remove(TRANSCRIPT_DIR + key + "_" + suffix + ".json")
+        self.uncheck_all()
+        self.populate_list()
+
+    def on_item_clicked(self, item: QListWidgetItem):
+        """Single-click: toggle checkbox"""
+        # invert check state
+        new_state = Qt.CheckState.Unchecked if item.checkState() == Qt.CheckState.Checked else Qt.CheckState.Checked
+        item.setCheckState(new_state)
+
+    def on_item_double_clicked(self, item: QListWidgetItem):
+        """Double-click: open video if it's downloaded"""
         # Retrieve the video URL from the clicked item.
-        video_cache_path = item.data(Qt.ItemDataRole.UserRole + 2)
         name_entry = item.data(Qt.ItemDataRole.UserRole + 1)
         video_url = item.data(Qt.ItemDataRole.UserRole)
-        # Check if video is downloaded in cache and open players
-        video_cache_path = "cache/videos/" + video_cache_path + ".mp4" 
-        if os.path.exists(video_cache_path):
-            # return the video and opens it directly in the transcriber
-            self.switch_to_transcriber_callback(video_cache_path)
-
-        # Open the AddVideoDialog with the URL pre-filled.
+        key = item.text()
+        video_path = os.path.join(VIDEO_DIR, f"{key}.mp4")
+        if os.path.exists(video_path):
+            self.switch_to_transcriber_callback(video_path)
         else :
             dialog = AddVideoDialog()
             dialog.name_entry.setText(name_entry)
@@ -133,6 +211,14 @@ class AddRSSDialog(QDialog):
         set_rss_url_cache(self.url_rss.text(), title)
 
         self.accept()
+
+    def on_item_double_clicked(self, item: QListWidgetItem):
+        """Open video if it's downloaded"""
+        key = item.text()
+        video_path = os.path.join(VIDEO_DIR, f"{key}.mp4")
+        if os.path.exists(video_path):
+            self.switch_to_transcriber_callback(video_path)
+
 
 class AddVideoDialog(QDialog):
     def __init__(self):
@@ -228,9 +314,9 @@ class AddVideoDialog(QDialog):
                 video_name += ".mp4"
 
         # Use video_name if downloading from a URL; otherwise, use the local file path.
-        video_path = "cache/videos/"+video_name if url_or_path.startswith("http") else url_or_path
+        video_path = VIDEO_DIR + video_name if url_or_path.startswith("http") else url_or_path
         print("Video path to be processed:", video_path)
-        audio_path = "cache/audios/audio.wav"
+        audio_path = AUDIO_DIR + "audio.wav"
         self.video_path_cache = video_path
 
         if url_or_path.startswith("http"):
