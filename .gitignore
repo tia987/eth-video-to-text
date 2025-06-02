@@ -1,7 +1,10 @@
+build/
+dist/
 vtt/
+__pycache__/
+
 *.wav
 *.mp4
-
-__pycache__/
+*.spec
 
 .DS_Store

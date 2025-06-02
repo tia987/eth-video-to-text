@@ -1,4 +1,4 @@
-import os, json, ffmpeg, whisper, feedparser
+import os, json, ffmpeg, whisper, feedparser, shutil
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QPushButton, QListWidget, QDialog, QLineEdit,
@@ -326,6 +326,9 @@ class AddVideoDialog(QDialog):
                 download_video(url_or_path, video_path)
             else:
                 print("Video already downloaded, skipping download.")
+        else:
+            # Copy local file in cache
+            shutil.copyfile(url_or_path, VIDEO_DIR + video_name)
 
         cache_file = get_cache_path(video_path, model_name)
         if transcribe == 1:

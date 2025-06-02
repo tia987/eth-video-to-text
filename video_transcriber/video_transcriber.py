@@ -181,66 +181,131 @@ class VideoTranscriber(QWidget):
             self.output_text.setText(f"Error: {str(e)}")
 
     def update_transcription(self, position):
-        current_time = position / 1000  # Convert ms to seconds
-        previous_text = []
-        upcoming_text = []
-        previous_lines = []
-        upcoming_lines = []
-        active_word = ""
+        """
+        Rebuild the transcript so that:
+          - Before first segment starts: all gray.
+          - After last segment ends: all white.
+          - In a gap between segments: segments with end < current_time are white; others gray.
+          - While inside a segment: previous segments white, current segment split (white/ cyan/ gray), future gray.
 
-        for segment in self.transcription_segments:
-            if segment['start'] < current_time:
-                previous_lines.append(segment['text'])
-            elif segment['start'] <= current_time <= segment['end']:
-                active_lines = segment['text']
-            else:
-                upcoming_lines.append(segment['text'])
+        Always scroll so that up to 10 “white” lines are visible above (i.e. scroll to anchor max(0, last_spoken_index-10)).
+        """
+        current_time = position / 1000.0  # ms → seconds
+        segments = self.transcription_segments
 
-        for segment in self.transcription_segments:
-            if segment['start'] <= current_time <= segment['end']:
-                words = segment['text'].split()  # Split segment into words
-                elapsed_time = current_time - segment['start']
-                segment_duration = segment['end'] - segment['start']
-                
-                # Find which word should be highlighted based on elapsed time
-                word_index = int((elapsed_time / segment_duration) * len(words))
-                word_index = min(word_index, len(words) - 1)  # Ensure index is in range
-                
-                previous_text = words[:word_index]
-                previous_text.append(' ')
-                active_word = words[word_index]
-                active_word += " "
-                upcoming_text = words[word_index + 1:]
+        # 1) Try to find an active segment (where start ≤ current_time ≤ end)
+        active_index = None
+        for i, seg in enumerate(segments):
+            if seg["start"] <= current_time <= seg["end"]:
+                active_index = i
                 break
-            # elif segment['start'] < current_time:
-            #     previous_text.append(segment['text'])
-            # else:
-            #     upcoming_text.append(segment['text'])
 
-        # Preserve scroll position
-        scroll_position = self.output_text.verticalScrollBar().value()
+        # 2) Find the index of the last‐spoken segment (i.e. seg.end < current_time).  
+        #    If none, last_spoken = -1.
+        last_spoken = -1
+        for i, seg in enumerate(segments):
+            if seg["end"] < current_time:
+                last_spoken = i
 
-        # Retrieve the font size from the settings
-        settings = load_settings()
-        font_size = settings.get("font_size", 12)
+        fs = load_settings().get("font_size", 12)
 
-        # Format the text with word-level highlighting
-        transcript_html = (
-            # f"<div style='text-align: center;'>"
-            f"<div style='font-size: {font_size}px;'>"
-            f"<span style='color: white;'>{' '.join(previous_lines[-7:-1])}</span>"  # Show last 7 lines
-            f"<span style='color: white;'>{' '}</span>"  # Set spacing between previous line and active line
-            f"<span style='color: white;'>{' '.join(previous_text[:])}</span>"
-            f"<span style='color: cyan;'>{active_word}</span>"
-            f"<span style='color: gray;'>{' '.join(upcoming_text[:])}</span>" 
-            f"<span style='color: gray;'>{' '.join(upcoming_lines[:7])}</span>"  # Show next 7 lines
-            f"</div>"
-        )
+        # 3a) Case A: before the very first segment starts
+        if active_index is None and current_time < segments[0]["start"]:
+            html = f"<div style='font-size: {fs}px;'>"
+            for i, s in enumerate(segments):
+                html += (
+                    f"<a name='seg_{i}'></a>"
+                    f"<span style='color:gray;'>{s['text']}</span> "
+                )
+            html += "</div>"
 
-        self.output_text.setHtml(transcript_html)
+            self.output_text.setHtml(html)
+            # Nothing is white yet, so last_spoken = -1; scroll to 0 (max(0, -1 - 10) → 0)
+            self.output_text.scrollToAnchor("seg_0")
+            return
 
-        # Restore scroll position
-        self.output_text.verticalScrollBar().setValue(scroll_position)
+        # 3b) Case B: after the very last segment ends
+        if current_time > segments[-1]["end"]:
+            html = f"<div style='font-size: {fs}px;'>"
+            for i, s in enumerate(segments):
+                html += (
+                    f"<a name='seg_{i}'></a>"
+                    f"<span style='color:white;'>{s['text']}</span> "
+                )
+            html += "</div>"
+
+            self.output_text.setHtml(html)
+            # last_spoken = len(segments)-1, so scroll_anchor = max(0, last_spoken-10)
+            scroll_anchor = max(0, len(segments) - 1 - 10)
+            self.output_text.scrollToAnchor(f"seg_{scroll_anchor}")
+            return
+
+        # 3c) Case C: we are in a gap between segments (no active_index, but not before first or after last)
+        if active_index is None:
+            # Build HTML: segments 0..last_spoken in white; (last_spoken+1)..end in gray
+            html = f"<div style='font-size: {fs}px;'>"
+            for i, s in enumerate(segments):
+                html += f"<a name='seg_{i}'></a>"
+                if i <= last_spoken:
+                    html += f"<span style='color:white;'>{s['text']}</span> "
+                else:
+                    html += f"<span style='color:gray;'>{s['text']}</span> "
+            html += "</div>"
+
+            self.output_text.setHtml(html)
+            scroll_anchor = max(0, last_spoken - 10)
+            self.output_text.scrollToAnchor(f"seg_{scroll_anchor}")
+            return
+
+        # 4) Case D: We do have an active segment at active_index
+        seg = segments[active_index]
+        words = seg["text"].split()
+        elapsed = current_time - seg["start"]
+        dur = seg["end"] - seg["start"]
+        widx = int((elapsed / dur) * len(words))
+        widx = min(widx, len(words) - 1)
+
+        prev_words = " ".join(words[:widx])
+        active_word = words[widx]
+        next_words = " ".join(words[widx + 1 :])
+
+        # Build the full HTML:
+        #   - For i < active_index: already said → white
+        #   - For i == active_index: split into white/ cyan/ gray
+        #   - For i > active_index: future → gray
+        full_html = f"<div style='font-size: {fs}px;'>"
+        for i, s in enumerate(segments):
+            full_html += f"<a name='seg_{i}'></a>"
+            if i < active_index:
+                full_html += f"<span style='color:white;'>{s['text']}</span> "
+            elif i == active_index:
+                # Three‐color split for the active segment
+                seg_html = (
+                    f"<span>"
+                    f"<span style='color:white;'>{prev_words} </span>"
+                    f"<span style='color:cyan;'>{active_word} </span>"
+                    f"<span style='color:gray;'>{next_words}</span>"
+                    f"</span> "
+                )
+                full_html += seg_html
+            else:
+                full_html += f"<span style='color:gray;'>{s['text']}</span> "
+        full_html += "</div>"
+
+        self.output_text.setHtml(full_html)
+
+        # Now, scroll so that up to 10 “white” segments above the active one remain visible.
+        scroll_anchor = max(0, active_index - 10)
+        self.output_text.scrollToAnchor(f"seg_{scroll_anchor}")
+
+        # Optional nudge: if you want the active segment slightly more centered,
+        # uncomment the lines below. Otherwise, you can remove them.
+        cursor = self.output_text.textCursor()
+        doc = self.output_text.document()
+        found = doc.find(f"seg_{active_index}", 0)
+        if not found.isNull():
+            self.output_text.setTextCursor(found)
+            self.output_text.centerCursor()
 
     # Functions for video playing
     def forward_10s(self):
